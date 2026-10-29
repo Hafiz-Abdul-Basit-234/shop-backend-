@@ -42,7 +42,7 @@ router.post("/login", async (req, res) => {
         role: admin.role
       },
       process.env.JWT_SECRET,
-      { expiresIn: "2h" }
+      { expiresIn: "1h" }
     );
 
     res.json({
