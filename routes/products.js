@@ -4,6 +4,8 @@ const adminAuth = require("../middleware/adminauth");
 
 const router = express.Router();
 
+
+
 // Customer: sab products
 router.get("/", async (req, res) => {
   const products = await Product.find().sort({ createdAt: -1 });
