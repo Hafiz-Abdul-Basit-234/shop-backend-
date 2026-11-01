@@ -75,9 +75,21 @@ async function connectDB() {
 
         const password = process.env.ADMIN_PASSWORD;
 
-        if (!email || !password) {
-          throw new Error("Admin environment variables are missing");
-        }
+        if (email && password) {
+  const existingAdmin = await Admin.findOne({ email });
+
+  if (!existingAdmin) {
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    await Admin.create({
+      email,
+      password: hashedPassword,
+      role: "admin"
+    });
+
+    console.log("Initial admin account created");
+  }
+}
 
         const existingAdmin = await Admin.findOne({ email });
 
@@ -108,17 +120,8 @@ async function connectDB() {
 
 app.use(async (req, res, next) => {
   try {
-    if (
-      !process.env.MONGODB_URI ||
-      !process.env.JWT_SECRET ||
-      !process.env.ADMIN_EMAIL ||
-      !process.env.ADMIN_PASSWORD
-    ) {
-      throw new Error("Required environment variables are missing");
-    }
-
-    if (process.env.JWT_SECRET.length < 32) {
-      throw new Error("JWT_SECRET must be at least 32 characters");
+    if (!process.env.MONGODB_URI) {
+      throw new Error("MONGODB_URI is missing");
     }
 
     await connectDB();
@@ -133,7 +136,6 @@ app.use(async (req, res, next) => {
     });
   }
 });
-
 // ===================================
 // 5. HEALTH CHECK ROUTES
 // ===================================
