@@ -22,8 +22,8 @@ const app = express();
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "http://localhost:5174",
-  "https://dashboard-u19z.vercel.app/",
+  "http://localhost:5175",
+  "https://dashboard-u19z.vercel.app",
   "https://shop-website-ubw7.vercel.app"
 ];
 
