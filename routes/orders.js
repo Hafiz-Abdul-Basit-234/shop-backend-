@@ -1,83 +1,138 @@
+
 const express = require("express");
 const mongoose = require("mongoose");
+
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const adminAuth = require("../middleware/adminauth");
 
 const router = express.Router();
 
-// Customer: order place
+// ===================================
+// CUSTOMER: PLACE ORDER
+// ===================================
+
 router.post("/", async (req, res) => {
   try {
-    const { customerName, customerEmail, address, items } =
-      req.body;
+    const {
+      customerName,
+      customerEmail,
+      customerPhone,
+      address,
+      items,
+    } = req.body;
 
+    // Validate customer details
     if (
       !customerName?.trim() ||
       !customerEmail?.trim() ||
-      !address?.trim() ||
-      !Array.isArray(items) ||
-      items.length === 0
+      !customerPhone?.trim() ||
+      !address?.trim()
     ) {
       return res.status(400).json({
-        message: "Complete customer and order details required"
+        message: "All customer details are required",
+      });
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(customerEmail)) {
+      return res.status(400).json({
+        message: "Invalid email address",
+      });
+    }
+
+    // Validate products
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "Your order must contain products",
       });
     }
 
     const orderItems = [];
-    let total = 0;
+    let subtotal = 0;
 
+    // Get actual products and prices from database
     for (const item of items) {
       if (
         !mongoose.isValidObjectId(item.productId) ||
-        !Number.isInteger(item.quantity) ||
-        item.quantity < 1
+        !Number.isInteger(Number(item.quantity)) ||
+        Number(item.quantity) < 1
       ) {
         return res.status(400).json({
-          message: "Invalid product or quantity"
+          message: "Invalid product ID or quantity",
         });
       }
 
-      const product = await Product.findOne({
-        _id: item.productId,
-        isActive: true
-      });
+      const product = await Product.findById(item.productId);
 
-      if (!product || product.stock < item.quantity) {
+      if (!product) {
+        return res.status(404).json({
+          message: "Product not found",
+        });
+      }
+
+      if (product.stock < Number(item.quantity)) {
         return res.status(400).json({
-          message: "Product unavailable or insufficient stock"
+          message: `${product.name} is out of stock`,
         });
       }
+
+      const quantity = Number(item.quantity);
 
       orderItems.push({
         product: product._id,
-        quantity: item.quantity,
-        price: product.price
+        productName: product.name,
+        productImage: product.image,
+        quantity,
+        price: product.price,
       });
 
-      total += product.price * item.quantity;
+      subtotal += product.price * quantity;
     }
 
+    // Calculate amount on backend
+    const discount = Number((subtotal * 0.20).toFixed(2));
+    const deliveryFee = orderItems.length > 0 ? 15 : 0;
+    const total = Number(
+      (subtotal - discount + deliveryFee).toFixed(2)
+    );
+
+    // Save order in MongoDB
     const order = await Order.create({
       customerName: customerName.trim(),
-      customerEmail: customerEmail.trim(),
+      customerEmail: customerEmail.trim().toLowerCase(),
+      customerPhone: customerPhone.trim(),
       address: address.trim(),
       items: orderItems,
-      total
+      subtotal,
+      discount,
+      deliveryFee,
+      total,
     });
 
-    res.status(201).json({
-      message: "Order placed",
-      order
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      order,
     });
+
   } catch (error) {
-    res.status(500).json({
-      message: "Order create nahi hua"
+    console.error("ORDER ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to place order",
     });
   }
 });
 
-// Admin: tamam orders
+
+// ===================================
+// ADMIN: GET ALL ORDERS
+// ===================================
+
 router.get("/", adminAuth, async (req, res) => {
   try {
     const orders = await Order.find()
@@ -85,14 +140,21 @@ router.get("/", adminAuth, async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json(orders);
+
   } catch (error) {
+    console.error("GET ORDERS ERROR:", error);
+
     res.status(500).json({
-      message: "Orders load nahi huay"
+      message: "Orders could not be loaded",
     });
   }
 });
 
-// Admin: order status update
+
+// ===================================
+// ADMIN: UPDATE ORDER STATUS
+// ===================================
+
 router.patch("/:id/status", adminAuth, async (req, res) => {
   try {
     const allowedStatuses = [
@@ -100,31 +162,41 @@ router.patch("/:id/status", adminAuth, async (req, res) => {
       "confirmed",
       "shipped",
       "delivered",
-      "cancelled"
+      "cancelled",
     ];
 
-    if (!allowedStatuses.includes(req.body.status)) {
+    const { status } = req.body;
+
+    if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
-        message: "Invalid order status"
+        message: "Invalid order status",
       });
     }
 
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { status: req.body.status },
-      { new: true, runValidators: true }
+      { status },
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
     if (!order) {
       return res.status(404).json({
-        message: "Order not found"
+        message: "Order not found",
       });
     }
 
-    res.json(order);
+    res.json({
+      success: true,
+      message: "Order status updated",
+      order,
+    });
+
   } catch (error) {
-    res.status(400).json({
-      message: "Order status update nahi hua"
+    res.status(500).json({
+      message: "Order status update failed",
     });
   }
 });
