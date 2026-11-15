@@ -1,7 +1,7 @@
 
 const express = require("express");
 const mongoose = require("mongoose");
-
+const sendOrderEmail = require("../utils/orderEmail");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const adminAuth = require("../middleware/adminauth");
@@ -95,6 +95,7 @@ router.post("/", async (req, res) => {
     // Calculate amount on backend
     const discount = Number((subtotal * 0.20).toFixed(2));
     const deliveryFee = orderItems.length > 0 ? 15 : 0;
+
     const total = Number(
       (subtotal - discount + deliveryFee).toFixed(2)
     );
@@ -111,6 +112,17 @@ router.post("/", async (req, res) => {
       deliveryFee,
       total,
     });
+
+    // Send confirmation email to customer
+    try {
+      await sendOrderEmail(order);
+      console.log("Order confirmation email sent successfully");
+    } catch (emailError) {
+      console.error(
+        "ORDER EMAIL ERROR:",
+        emailError.message
+      );
+    }
 
     return res.status(201).json({
       success: true,
@@ -195,6 +207,8 @@ router.patch("/:id/status", adminAuth, async (req, res) => {
     });
 
   } catch (error) {
+    console.error("UPDATE ORDER STATUS ERROR:", error);
+
     res.status(500).json({
       message: "Order status update failed",
     });
